@@ -53,6 +53,10 @@ paymentsRouter.post('/', (req, res) => {
   }
 
   // Accept a JSON number or a numeric string from the form.
+  if (typeof amount !== 'number' && typeof amount !== 'string') {
+  return res.status(400).json({ error: 'amount must be a number or numeric string' });
+}
+
   const parsedAmount = typeof amount === 'number' ? amount : Number(amount);
   if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
     return res.status(400).json({ error: 'amount must be a number greater than zero' });
