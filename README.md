@@ -55,6 +55,8 @@ If you change the server port, set `VITE_API_URL` to match. If you change the cl
 
 **Resetting the demo:** delete `server/data/` and restart. The schema and the seed data rebuild automatically.
 
+> **Note on the seed data.** The seed includes one payment in `Sent`, representing a batch that was in flight. Restart recovery (see below) correctly treats it as stranded and settles it about 5 seconds after the server boots — so it lands on `Success` or `Failed` shortly after you first open the app. That's the recovery mechanism demonstrating itself, not a bug. To watch a payment sit in amber `Sent` for the full window, click **Generate & Send Batch**.
+
 ---
 
 ## The core flow
