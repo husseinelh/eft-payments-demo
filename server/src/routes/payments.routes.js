@@ -19,7 +19,7 @@ export const paymentsRouter = Router();
 
 /** GET /api/payments — the full ledger, newest first. */
 paymentsRouter.get('/', (req, res) => {
-  res.json(listPayments());
+  res.json(await listPayments());
 });
 
 /** GET /api/payments/:id/history — audit trail for one payment. */
