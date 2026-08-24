@@ -1,5 +1,5 @@
 import { db, nextItemTraceNumber, generateAccountNumber, isoNow } from './db.js';
-
+import { getSqlPool } from './sqlDb.js';
 /**
  * All SQL for payments lives here. Routes never touch the database directly —
  * roughly the role a repository class plays in a C# project.
@@ -64,8 +64,16 @@ function toApiShape(row) {
 // Reads
 // ---------------------------------------------------------------------------
 
-export function listPayments() {
-  return stmts.selectAll.all().map(toApiShape);
+export async function listPayments() {
+  const pool = await getSqlPool();
+
+  const result = await pool.request().query(`
+    SELECT *
+    FROM dbo.payments
+    ORDER BY createdAt DESC, id DESC
+  `);
+
+  return result.recordset.map(toApiShape);
 }
 
 export function getPaymentById(id) {

@@ -18,7 +18,7 @@ import {
 export const paymentsRouter = Router();
 
 /** GET /api/payments — the full ledger, newest first. */
-paymentsRouter.get('/', (req, res) => {
+paymentsRouter.get('/', async (req, res) => {
   res.json(await listPayments());
 });
 
