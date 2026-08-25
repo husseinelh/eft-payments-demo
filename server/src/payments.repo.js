@@ -103,7 +103,10 @@ export async function getPendingPaymentRows() {
       ORDER BY createdAt ASC, id ASC
     `);
 
-  return result.recordset;
+  return result.recordset.map((row) => ({
+    ...row,
+    amountCents: Number(row.amountCents),
+  }));
 }
 
 export async function getSentPaymentIds() {
