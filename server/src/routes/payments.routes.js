@@ -23,17 +23,17 @@ paymentsRouter.get('/', async (req, res) => {
 });
 
 /** GET /api/payments/:id/history — audit trail for one payment. */
-paymentsRouter.get('/:id/history', (req, res) => {
-  const payment = getPaymentById(req.params.id);
+paymentsRouter.get('/:id/history',async (req, res) => {
+  const payment = await getPaymentById(req.params.id);
   if (!payment) {
     return res.status(404).json({ error: `No payment found with trace number ${req.params.id}` });
   }
-  res.json(getPaymentHistory(req.params.id));
+  res.json(await getPaymentHistory(req.params.id));
 });
 
 /** GET /api/payments/:id — single payment. */
-paymentsRouter.get('/:id', (req, res) => {
-  const payment = getPaymentById(req.params.id);
+paymentsRouter.get('/:id', async (req, res) => {
+  const payment = await getPaymentById(req.params.id);
   if (!payment) {
     return res.status(404).json({ error: `No payment found with trace number ${req.params.id}` });
   }
