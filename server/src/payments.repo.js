@@ -1,4 +1,4 @@
-import { db, nextItemTraceNumber, generateAccountNumber, isoNow } from './db.js';
+import { generateAccountNumber } from './paymentUtils.js';
 import { getSqlPool, sql } from './sqlDb.js';
 
 /**
@@ -18,26 +18,6 @@ const FINAL_STATUSES = new Set(['Success', 'Failed']);
 // parameter binding makes SQL injection impossible.
 // ---------------------------------------------------------------------------
 
-const stmts = {
-  selectAll: db.prepare(`SELECT * FROM payments ORDER BY datetime(createdAt) DESC, id DESC`),
-  selectById: db.prepare(`SELECT * FROM payments WHERE id = ?`),
-  selectByStatus: db.prepare(
-    `SELECT * FROM payments WHERE status = ? ORDER BY datetime(createdAt) ASC, id ASC`
-  ),
-  insertPayment: db.prepare(`
-    INSERT INTO payments (id, customerName, amountCents, accountNumber, status, createdAt, processedAt)
-    VALUES (@id, @customerName, @amountCents, @accountNumber, 'Pending', @createdAt, NULL)
-  `),
-  updateStatus: db.prepare(`UPDATE payments SET status = ?, processedAt = ? WHERE id = ?`),
-  insertHistory: db.prepare(`
-    INSERT INTO payment_history (paymentId, oldStatus, newStatus, timestamp)
-    VALUES (?, ?, ?, ?)
-  `),
-  selectHistory: db.prepare(`
-    SELECT id, paymentId, oldStatus, newStatus, timestamp
-    FROM payment_history WHERE paymentId = ? ORDER BY id ASC
-  `),
-};
 
 // ---------------------------------------------------------------------------
 // Mapping

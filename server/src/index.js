@@ -2,7 +2,6 @@ import express from 'express';
 import cors from 'cors';
 
 import { PORT, CLIENT_ORIGIN } from './config.js';
-import { seedIfEmpty, DB_PATH } from './db.js';
 import { paymentsRouter } from './routes/payments.routes.js';
 import { batchesRouter } from './routes/batches.routes.js';
 import { mockBankRouter } from './routes/mockBank.routes.js';
@@ -57,14 +56,11 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: err.message || 'Internal server error' });
 });
 
-const wasSeeded = seedIfEmpty();
 
 app.listen(PORT, () => {
   console.log('');
   console.log(`  EFT demo API listening on http://localhost:${PORT}`);
-  console.log(`  Database: ${DB_PATH}`);
   console.log(`  CORS origin allowed: ${CLIENT_ORIGIN}`);
-  if (wasSeeded) console.log('  Seeded sample payments (first run)');
   console.log('');
 
   // Sweep up any batch stranded mid-flight by a restart. Runs after listen()
