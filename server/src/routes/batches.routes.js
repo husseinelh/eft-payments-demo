@@ -19,8 +19,8 @@ export const batchesRouter = Router();
  * Validation sits before the database write on purpose: a file that fails its
  * own checks must leave every payment untouched and still Pending.
  */
-batchesRouter.post('/generate', (req, res) => {
-  const pendingRows = getPendingPaymentRows();
+batchesRouter.post('/generate',async (req, res) => {
+  const pendingRows = await getPendingPaymentRows();
 
   if (pendingRows.length === 0) {
     // 409 Conflict: the request is well-formed, the system state just doesn't

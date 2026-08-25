@@ -159,8 +159,8 @@ export function applyBankResults(fileId, expectedTraceNumbers, results) {
  * window would strand those payments in Sent forever. On boot, sweep up anything
  * still Sent and schedule a return for it.
  */
-export function recoverInFlightPayments() {
-  const stranded = getSentPaymentIds();
+export async function recoverInFlightPayments() {
+  const stranded = await getSentPaymentIds();
   if (stranded.length === 0) return 0;
 
   console.log(
