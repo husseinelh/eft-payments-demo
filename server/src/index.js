@@ -69,5 +69,6 @@ app.listen(PORT, () => {
 
   // Sweep up any batch stranded mid-flight by a restart. Runs after listen()
   // because the recovery path calls the mock bank over HTTP on this same server.
-  recoverInFlightPayments();
-});
+recoverInFlightPayments().catch((err) => {
+  console.error(`Recovery failed: ${err.message}`);
+});});

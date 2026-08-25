@@ -80,7 +80,7 @@ export async function processBankReturn(fileId, itemTraceNumbers) {
     throw new Error('Mock bank response contained no results array');
   }
 
-  applyBankResults(fileId, itemTraceNumbers, results);
+  await applyBankResults(fileId, itemTraceNumbers, results);
 }
 
 /**
@@ -90,7 +90,7 @@ export async function processBankReturn(fileId, itemTraceNumbers) {
  * position. Results are indexed into a Map and each payment is resolved by key
  * lookup, so ordering differences or a partial return can't misalign anything.
  */
-export function applyBankResults(fileId, expectedTraceNumbers, results) {
+export async function applyBankResults(fileId, expectedTraceNumbers, results) {
   const byTraceNumber = new Map();
   for (const result of results) {
     if (!result?.itemTraceNumber) {
@@ -127,7 +127,7 @@ export function applyBankResults(fileId, expectedTraceNumbers, results) {
 
     // finalisePayment only transitions rows currently in Sent, so a duplicate or
     // late return cannot overwrite an already-finalised payment.
-    const applied = finalisePayment(traceNumber, newStatus);
+    const applied = await finalisePayment(traceNumber, newStatus);
 
     if (!applied) {
       console.warn(
