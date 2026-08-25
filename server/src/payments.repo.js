@@ -150,22 +150,85 @@ export async function getPaymentHistory(paymentId) {
  * Returns false when the payment is missing or already in the target status,
  * which makes repeated calls harmless (idempotent).
  */
-export const changeStatus = db.transaction((paymentId, newStatus, expectedCurrentStatus = null) => {
-  const row = stmts.selectById.get(paymentId);
-  if (!row) return false;
-  if (row.status === newStatus) return false;
+async function changeStatusInTransaction(
+  transaction,
+  paymentId,
+  newStatus,
+  expectedCurrentStatus = null
+) {
+  const timestamp = new Date();
+  const isFinal = FINAL_STATUSES.has(newStatus);
 
-  // Optimistic guard: refuse the change if the row moved on since we looked.
-  // Stops a late or duplicated bank return from resurrecting a finalised payment.
-  if (expectedCurrentStatus !== null && row.status !== expectedCurrentStatus) return false;
+  const result = await new sql.Request(transaction)
+    .input('paymentId', sql.NVarChar(32), paymentId)
+    .input('newStatus', sql.NVarChar(20), newStatus)
+    .input('expectedCurrentStatus', sql.NVarChar(20), expectedCurrentStatus)
+    .input('timestamp', sql.DateTime2(3), timestamp)
+    .input('isFinal', sql.Bit, isFinal)
+    .query(`
+      UPDATE dbo.payments
+      SET
+        status = @newStatus,
+        processedAt =
+          CASE
+            WHEN @isFinal = 1 THEN @timestamp
+            ELSE processedAt
+          END
+      OUTPUT DELETED.status AS oldStatus
+      WHERE id = @paymentId
+        AND status <> @newStatus
+        AND (
+          @expectedCurrentStatus IS NULL
+          OR status = @expectedCurrentStatus
+        )
+    `);
 
-  const timestamp = isoNow();
-  const processedAt = FINAL_STATUSES.has(newStatus) ? timestamp : row.processedAt;
+  if (result.recordset.length === 0) {
+    return false;
+  }
 
-  stmts.updateStatus.run(newStatus, processedAt, paymentId);
-  stmts.insertHistory.run(paymentId, row.status, newStatus, timestamp);
+  const oldStatus = result.recordset[0].oldStatus;
+
+  await new sql.Request(transaction)
+    .input('paymentId', sql.NVarChar(32), paymentId)
+    .input('oldStatus', sql.NVarChar(20), oldStatus)
+    .input('newStatus', sql.NVarChar(20), newStatus)
+    .input('timestamp', sql.DateTime2(3), timestamp)
+    .query(`
+      INSERT INTO dbo.payment_history
+        (paymentId, oldStatus, newStatus, [timestamp])
+      VALUES
+        (@paymentId, @oldStatus, @newStatus, @timestamp)
+    `);
+
   return true;
-});
+}
+
+export async function changeStatus(
+  paymentId,
+  newStatus,
+  expectedCurrentStatus = null
+) {
+  const pool = await getSqlPool();
+  const transaction = new sql.Transaction(pool);
+
+  await transaction.begin();
+
+  try {
+    const changed = await changeStatusInTransaction(
+      transaction,
+      paymentId,
+      newStatus,
+      expectedCurrentStatus
+    );
+
+    await transaction.commit();
+    return changed;
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
 
 /** Creates a Pending payment plus its opening history row, atomically. */
 export async function createPayment({ customerName, amount }) {
@@ -227,19 +290,39 @@ export async function createPayment({ customerName, amount }) {
  * update throws, SQLite rolls the whole thing back — so the batch can never be
  * half-sent, leaving no payment stranded in a state the bank never heard about.
  */
-export const markBatchAsSent = db.transaction((paymentIds) => {
-  let updated = 0;
-  for (const id of paymentIds) {
-    const ok = changeStatus(id, 'Sent', 'Pending');
-    if (!ok) {
-      // A payment that was Pending when the file was built is no longer Pending.
-      // Throwing here rolls back every update in this transaction.
-      throw new Error(`Payment ${id} was not in Pending status at batch time — batch rolled back`);
+export async function markBatchAsSent(paymentIds) {
+  const pool = await getSqlPool();
+  const transaction = new sql.Transaction(pool);
+
+  await transaction.begin();
+
+  try {
+    let updated = 0;
+
+    for (const id of paymentIds) {
+      const ok = await changeStatusInTransaction(
+        transaction,
+        id,
+        'Sent',
+        'Pending'
+      );
+
+      if (!ok) {
+        throw new Error(
+          `Payment ${id} was not in Pending status at batch time — batch rolled back`
+        );
+      }
+
+      updated += 1;
     }
-    updated += 1;
+
+    await transaction.commit();
+    return updated;
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
   }
-  return updated;
-});
+}
 
 /** Applies a bank result. Only transitions payments currently in Sent. */
 export function finalisePayment(paymentId, newStatus) {

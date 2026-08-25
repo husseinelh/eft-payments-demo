@@ -45,7 +45,7 @@ batchesRouter.post('/generate',async (req, res) => {
   // All-or-nothing. Throws (and rolls back every row) if any payment is no
   // longer Pending — e.g. two batch requests racing each other.
   try {
-    markBatchAsSent(eft.itemTraceNumbers);
+    await markBatchAsSent(eft.itemTraceNumbers);
   } catch (err) {
     console.error(`  Batch transaction ROLLED BACK: ${err.message}`);
     return res.status(409).json({
