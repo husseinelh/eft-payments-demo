@@ -1,5 +1,6 @@
 import { db, nextItemTraceNumber, generateAccountNumber, isoNow } from './db.js';
-import { getSqlPool } from './sqlDb.js';
+import { getSqlPool, sql } from './sqlDb.js';
+
 /**
  * All SQL for payments lives here. Routes never touch the database directly —
  * roughly the role a repository class plays in a C# project.
@@ -126,22 +127,57 @@ export const changeStatus = db.transaction((paymentId, newStatus, expectedCurren
 });
 
 /** Creates a Pending payment plus its opening history row, atomically. */
-export const createPayment = db.transaction(({ customerName, amount }) => {
-  const id = nextItemTraceNumber();
-  const createdAt = isoNow();
+export async function createPayment({ customerName, amount }) {
+  const pool = await getSqlPool();
+  const transaction = new sql.Transaction(pool);
 
-  stmts.insertPayment.run({
-    id,
-    customerName,
-    amountCents: Math.round(amount * 100),
-    accountNumber: generateAccountNumber(),
-    createdAt,
-  });
-  // oldStatus is NULL — the row came into existence as Pending.
-  stmts.insertHistory.run(id, null, 'Pending', createdAt);
+  await transaction.begin();
 
-  return toApiShape(stmts.selectById.get(id));
-});
+  try {
+    const counterResult = await new sql.Request(transaction).query(`
+      UPDATE dbo.counters
+      SET value = value + 1
+      OUTPUT INSERTED.value
+      WHERE name = 'itemTraceNumber'
+    `);
+
+    const traceNumber = counterResult.recordset[0].value;
+    const id = `ITM-${String(traceNumber).padStart(9, '0')}`;
+
+    const createdAt = new Date();
+
+    const paymentResult = await new sql.Request(transaction)
+      .input('id', sql.NVarChar(32), id)
+      .input('customerName', sql.NVarChar(200), customerName)
+      .input('amountCents', sql.BigInt, Math.round(amount * 100))
+      .input('accountNumber', sql.NVarChar(32), generateAccountNumber())
+      .input('createdAt', sql.DateTime2(3), createdAt)
+      .query(`
+        INSERT INTO dbo.payments
+          (id, customerName, amountCents, accountNumber, status, createdAt, processedAt)
+        OUTPUT INSERTED.*
+        VALUES
+          (@id, @customerName, @amountCents, @accountNumber, 'Pending', @createdAt, NULL)
+      `);
+
+    await new sql.Request(transaction)
+      .input('paymentId', sql.NVarChar(32), id)
+      .input('timestamp', sql.DateTime2(3), createdAt)
+      .query(`
+        INSERT INTO dbo.payment_history
+          (paymentId, oldStatus, newStatus, [timestamp])
+        VALUES
+          (@paymentId, NULL, 'Pending', @timestamp)
+      `);
+
+    await transaction.commit();
+
+    return toApiShape(paymentResult.recordset[0]);
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
 
 /**
  * Event 1's all-or-nothing update.
