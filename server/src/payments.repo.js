@@ -77,22 +77,63 @@ export async function listPayments() {
   return result.recordset.map(toApiShape);
 }
 
-export function getPaymentById(id) {
-  return toApiShape(stmts.selectById.get(id));
+export async function getPaymentById(id) {
+  const pool = await getSqlPool();
+
+  const result = await pool.request()
+    .input('id', sql.NVarChar(32), id)
+    .query(`
+      SELECT *
+      FROM dbo.payments
+      WHERE id = @id
+    `);
+
+  return toApiShape(result.recordset[0]);
 }
 
-/** Raw rows (cents intact) — the batch builder needs exact integer amounts. */
-export function getPendingPaymentRows() {
-  return stmts.selectByStatus.all('Pending');
+export async function getPendingPaymentRows() {
+  const pool = await getSqlPool();
+
+  const result = await pool.request()
+    .input('status', sql.NVarChar(20), 'Pending')
+    .query(`
+      SELECT *
+      FROM dbo.payments
+      WHERE status = @status
+      ORDER BY createdAt ASC, id ASC
+    `);
+
+  return result.recordset;
 }
 
-/** Trace numbers of payments still in flight, used for restart recovery. */
-export function getSentPaymentIds() {
-  return stmts.selectByStatus.all('Sent').map((row) => row.id);
+export async function getSentPaymentIds() {
+  const pool = await getSqlPool();
+
+  const result = await pool.request()
+    .input('status', sql.NVarChar(20), 'Sent')
+    .query(`
+      SELECT *
+      FROM dbo.payments
+      WHERE status = @status
+      ORDER BY createdAt ASC, id ASC
+    `);
+
+  return result.recordset.map((row) => row.id);
 }
 
-export function getPaymentHistory(paymentId) {
-  return stmts.selectHistory.all(paymentId);
+export async function getPaymentHistory(paymentId) {
+  const pool = await getSqlPool();
+
+  const result = await pool.request()
+    .input('paymentId', sql.NVarChar(32), paymentId)
+    .query(`
+      SELECT id, paymentId, oldStatus, newStatus, [timestamp]
+      FROM dbo.payment_history
+      WHERE paymentId = @paymentId
+      ORDER BY id ASC
+    `);
+
+  return result.recordset;
 }
 
 // ---------------------------------------------------------------------------
