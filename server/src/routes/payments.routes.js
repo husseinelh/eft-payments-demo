@@ -41,7 +41,7 @@ paymentsRouter.get('/:id', (req, res) => {
 });
 
 /** POST /api/payments — create a new Pending payment. */
-paymentsRouter.post('/', (req, res) => {
+paymentsRouter.post('/', async (req, res) => {
   const { customerName, amount } = req.body ?? {};
 
   const name = typeof customerName === 'string' ? customerName.trim() : '';
@@ -71,6 +71,6 @@ paymentsRouter.post('/', (req, res) => {
     return res.status(400).json({ error: 'amount cannot have more than 2 decimal places' });
   }
 
-  const payment = createPayment({ customerName: name, amount: parsedAmount });
+  const payment = await createPayment({ customerName: name, amount: parsedAmount });
   res.status(201).json(payment);
 });
